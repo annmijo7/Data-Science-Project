@@ -1,0 +1,397 @@
+library(dplyr)
+house_data = read.csv(
+  "kc_house_subset.csv",
+  quote = "\"",
+  comment.char = "",
+  stringsAsFactors = FALSE)
+
+#Removing id from the data
+house_data=select(house_data,-id)
+
+min(house_data$price)
+max(house_data$price)
+mean(house_data$price)
+
+#Removing outlier
+house_data=house_data[!house_data$price=="5110800",]
+nrow(house_data)
+
+#new max and average
+max(house_data$price)
+mean(house_data$price)
+
+#Heat map for correlation between predictors
+library(corrplot)
+cor(house_data)
+corrplot(cor(house_data), method="square",type = "lower", order="hclust", addCoef.col = "black",number.cex = 0.5)
+
+plot(house_data$price, 
+     xlab="Index ", ylab="House Prices ", pch=19,col="Red")
+
+#Different plots
+plot(house_data$sqft_living, 
+     xlab="Index ", ylab="SQFT_living ", pch=19,col="Red")
+
+plot(house_data$bathrooms, 
+     xlab="Index ", ylab="bathrooms ", pch=19,col="Red")
+
+plot(house_data$sqft_living,type = "o",col = "red", xlab = "Index", ylab = "Sqft")
+lines(house_data$sqft_living15, type = "o", col = "blue")
+
+#We see from the above plot that price, the response variable, has the highest correlation with sqft_living
+plot(price~sqft_living, data=house_data)
+plot(price~grade, data=house_data)
+
+#From corplot, we see that sqft_living is correlated with sqft_above
+plot(sqft_above~sqft_living,data=house_data)
+plot(sqft_living ~ sqft_living15, data=house_data)
+plot(sqft_above ~ grade, data=house_data)
+
+plot(sqft_living ~ grade, data=house_data)
+plot(sqft_above ~ sqft_living15, data=house_data)
+
+plot(sqft_living15 ~ grade, data= house_data)
+plot(sqft_above ~ bathrooms, data=house_data)
+plot(sqft_living ~ bathrooms, data=house_data)
+#With the response variable
+plot(price ~ sqft_living15, data=house_data)
+plot(bathrooms~grade, data=house_data)
+
+house_data$waterfront=as.factor(house_data$waterfront)
+house_data$view=as.factor(house_data$view)
+house_data$condition=as.factor(house_data$condition)
+house_data$grade=as.factor(house_data$grade)
+
+
+#Splitting the data into train and test
+set.seed(110)
+idx = sample(nrow(house_data), 750)
+train = house_data[idx, ] 
+test = house_data[-idx, ] # Use 249 obs for testing
+
+#Basic Linear Model
+fit_model_lin<- lm(price~., data=train)
+summary(fit_model_lin)$r.squared 
+
+plot(fitted(fit_model_lin), resid(fit_model_lin), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_model_lin), col = "grey",pch=20,cex=2)
+qqline(resid(fit_model_lin), col = "dodgerblue", lwd = 2)
+library(lmtest)
+bptest(fit_model_lin)
+shapiro.test(resid(fit_model_lin))
+
+p1=predict(fit_model_lin,test)
+
+RMSE = function(m, o){
+  sqrt(mean((m - o)^2))
+}
+RMSE(test$price,p1)
+AIC(fit_model_lin)
+summary(fit_model_lin)
+
+#Boxcox
+library(MASS)
+par(mfrow=c(1,2))
+boxcox(fit_model_lin,lambda = seq(0, 5, by = 0.05))
+lambda = 3
+
+lm_cox <- lm(((price^(lambda)-1)/(lambda)) ~ ., data = train)
+
+par(mfrow=c(1,2))
+plot(resid(lm_cox)~fitted(lm_cox), col = "dodgerblue",
+     pch = 20, cex = 1.5, xlab = "Fitted", ylab = "Residuals",
+     main="Residual plot (After transforming Y)")
+abline(h=0, col = "darkorange", lwd = 2)
+qqnorm(resid(lm_cox), main = "Normal Q-Q Plot",col = "darkgrey",pch=20)
+qqline(resid(lm_cox), col = "dodgerblue", lwd = 2)
+bptest(lm_cox)
+shapiro.test(resid(lm_cox))
+summary(lm_cox)$r.squared
+AIC(lm_cox)
+pbox=predict(lm_cox,test)
+RMSE(test$price,pbox)
+
+#Quadratic model 
+fit_model_quad<- lm(price~.+I(sqft_lot15^2)+I(sqft_living15^2)+I(long^2)+I(lat^2)+I(zipcode^2)+I(yr_renovated^2)
+                    +I(yr_built^2)+I(sqft_basement^2)+I(sqft_above^2)+I(bedrooms^2)
+                    +I(bathrooms^2)+I(sqft_living^2)+I(sqft_lot^2)+I(floors^2), data=house_data)
+summary(fit_model_quad)
+
+plot(fitted(fit_model_quad), resid(fit_model_quad), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_model_quad), col = "grey",pch=20,cex=2)
+qqline(resid(fit_model_quad), col = "dodgerblue", lwd = 2)
+
+bptest(fit_model_quad)
+shapiro.test(resid(fit_model_quad))
+summary(fit_model_quad)$r.squared
+AIC(fit_model_quad)
+
+p2=predict(fit_model_quad,test)
+RMSE(test$price,p2)
+
+#Cubic term
+fit_model_cube<- lm(price~.+I(sqft_lot15^2)+I(sqft_lot15^3)+I(sqft_living15^2)+I(sqft_living15^3)
+                    +I(long^2)+I(long^3)+I(lat^2)+I(lat^3)+I(zipcode^2)+I(zipcode^3)+I(yr_renovated^2)+I(yr_renovated^3)
+                    +I(yr_built^2)+I(yr_built^3)+I(sqft_basement^2)+I(sqft_basement^3)+I(sqft_above^2)+I(sqft_above^3)
+                    +I(bedrooms^2)+I(bedrooms^3)+I(bathrooms^2)+I(bathrooms^3)+I(sqft_living^2)+I(sqft_living^3)+I(sqft_lot^2)+I(sqft_lot^3)
+                    +I(floors^2)+I(floors^3), data=house_data)
+summary(fit_model_cube)
+
+plot(fitted(fit_model_cube), resid(fit_model_cube), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_model_cube), col = "grey",pch=20,cex=2)
+qqline(resid(fit_model_cube), col = "dodgerblue", lwd = 2)
+
+bptest(fit_model_cube)
+shapiro.test(resid(fit_model_cube))
+summary(fit_model_cube)$r.squared
+AIC(fit_model_cube)
+
+p3=predict(fit_model_cube,test)
+RMSE(test$price,p3)
+
+plot(test$price,type = "o",col = "red", xlab = "Index", ylab = "House Prices", 
+     main = "Actual Values vs Predicted Values")
+lines(p3, type = "o", col = "blue")
+
+
+#Stepwise feature selection for lin
+fit_null<- lm(price~1, data=train)
+fit_step = step(fit_null,
+                    scope = price ~ bedrooms+bathrooms+sqft_living+sqft_lot+floors+waterfront+view+condition+grade+sqft_above+sqft_basement+yr_built+yr_renovated+zipcode+lat+long+sqft_living15+sqft_lot15, 
+                    direction = "both",trace=0)
+summary(fit_step)$r.squared 
+
+plot(fitted(fit_step), resid(fit_step), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_step), col = "grey",pch=20,cex=2)
+qqline(resid(fit_step), col = "dodgerblue", lwd = 2)
+
+bptest(fit_step)
+shapiro.test(resid(fit_step))
+AIC(fit_step)
+
+p1_fit=predict(fit_step,test)
+RMSE(test$price,p1_fit)
+
+#Stepwise for 2nd degree term
+fit_step2 = step(fit_null,
+                scope = price ~ bedrooms+bathrooms+sqft_living+sqft_lot+floors+waterfront+view+condition+grade+sqft_above
+                +sqft_basement+yr_built+yr_renovated+zipcode+lat+long+sqft_living15+sqft_lot15
+                +I(sqft_lot15^2)+I(sqft_living15^2)+I(long^2)+I(lat^2)+I(zipcode^2)+I(yr_renovated^2)
+                +I(yr_built^2)+I(sqft_basement^2)+I(sqft_above^2)+I(bedrooms^2)
+                +I(bathrooms^2)+I(sqft_living^2)+I(sqft_lot^2)+I(floors^2), 
+                direction = "both",trace=0)
+summary(fit_step2)$r.squared # 94%
+
+plot(fitted(fit_step2), resid(fit_step2), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_step2), col = "grey",pch=20,cex=2)
+qqline(resid(fit_step2), col = "dodgerblue", lwd = 2)
+
+bptest(fit_step2)
+shapiro.test(resid(fit_step2))
+AIC(fit_step2)
+
+p2_fit=predict(fit_step2,test)
+RMSE(test$price,p2_fit)
+
+#Stepwise for 3rd degree term
+fit_step3 = step(fit_null,
+                 scope = price ~ bedrooms+bathrooms+sqft_living+sqft_lot+floors+waterfront+view+condition+grade+sqft_above
+                 +sqft_basement+yr_built+yr_renovated+zipcode+lat+long+sqft_living15+sqft_lot15
+                 +I(sqft_lot15^2)+I(sqft_lot15^3)+I(sqft_living15^2)+I(sqft_living15^3)
+                 +I(long^2)+I(long^3)+I(lat^2)+I(lat^3)+I(zipcode^2)+I(zipcode^3)+I(yr_renovated^2)+I(yr_renovated^3)
+                 +I(yr_built^2)+I(yr_built^3)+I(sqft_basement^2)+I(sqft_basement^3)+I(sqft_above^2)+I(sqft_above^3)
+                 +I(bedrooms^2)+I(bedrooms^3)+I(bathrooms^2)+I(bathrooms^3)+I(sqft_living^2)+I(sqft_living^3)+I(sqft_lot^2)+I(sqft_lot^3)
+                 +I(floors^2)+I(floors^3), 
+                 direction = "both",trace=0)
+summary(fit_step3)$r.squared # 98%
+
+plot(fitted(fit_step3), resid(fit_step3), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_step3), col = "grey",pch=20,cex=2)
+qqline(resid(fit_step3), col = "dodgerblue", lwd = 2)
+
+bptest(fit_step3)
+shapiro.test(resid(fit_step3))
+AIC(fit_step3)
+p3_fit=predict(fit_step3,test)
+RMSE(test$price,p3_fit)
+
+#K fold Cross Validation
+set.seed(110)
+k = 5
+n=nrow(train)
+RMSE_lin = RMSE_quad = RMSE_cube=RMSE_fit=RMSE_fit2 =RMSE_fit3=RMSE_box= numeric(k)
+folds <- cut(1:n,breaks=k,labels=FALSE)
+for(i in 1:k)
+{
+  # Find the indices for test data
+  test_index = which(folds==i)
+  
+  # Obtain training/test data
+  test_data = house_data[test_index, ]
+  training_data = house_data[-test_index, ]
+  
+  kcv_lin = lm(price~., data=training_data)
+  
+  kcv_quad = lm(price~.+I(sqft_lot15^2)+I(sqft_living15^2)+I(long^2)+I(lat^2)+I(zipcode^2)+I(yr_renovated^2)
+                +I(yr_built^2)+I(sqft_basement^2)+I(sqft_above^2)+I(bedrooms^2)
+                +I(bathrooms^2)+I(sqft_living^2)+I(sqft_lot^2)+I(floors^2), data=training_data)
+ 
+   kcv_cube  = lm(price~.+I(sqft_lot15^2)+I(sqft_lot15^3)+I(sqft_living15^2)+I(sqft_living15^3)
+                 +I(long^2)+I(long^3)+I(lat^2)+I(lat^3)+I(zipcode^2)+I(zipcode^3)+I(yr_renovated^2)+I(yr_renovated^3)
+                 +I(yr_built^2)+I(yr_built^3)+I(sqft_basement^2)+I(sqft_basement^3)+I(sqft_above^2)+I(sqft_above^3)
+                 +I(bedrooms^2)+I(bedrooms^3)+I(bathrooms^2)+I(bathrooms^3)+I(sqft_living^2)+I(sqft_living^3)+I(sqft_lot^2)+I(sqft_lot^3)
+                 +I(floors^2)+I(floors^3), data=training_data)
+  
+   kcv_fit_lin= lm(price ~ grade + view + lat + sqft_living + waterfront + 
+                     yr_built + bathrooms + zipcode + bedrooms + sqft_living15 + 
+                     floors + condition + yr_renovated + long, data = training_data)
+  
+   kcv_fit_quad=lm(price ~ I(sqft_living^2) + view + lat + grade + 
+                     yr_built + waterfront + I(lat^2) + zipcode + I(bathrooms^2) + 
+                     I(sqft_living15^2) + I(bedrooms^2) + I(long^2) + I(yr_built^2) + 
+                     condition + I(yr_renovated^2) + I(sqft_above^2) + sqft_above + 
+                     I(sqft_basement^2) + I(zipcode^2), data = training_data)
+ 
+    kcv_fit_cube=lm(price ~ I(sqft_living^2) + view + lat + grade + 
+                      yr_built + waterfront + I(lat^3) + zipcode + I(bathrooms^2) + 
+                      I(sqft_living15^3) + I(sqft_above^3) + I(yr_built^3) + condition + 
+                      I(yr_renovated^3) + I(bedrooms^3) + I(sqft_basement^2) + 
+                      I(bathrooms^3) + bathrooms + long, data = training_data)
+  kcv_box=lm(((price^(lambda)-1)/(lambda)) ~ ., data = training_data)
+  
+  # Obtain RMSE on the 'test' data
+  resid_lin = test_data[,2] - predict(kcv_lin, newdata=test_data) 
+  RMSE_lin[i] = sqrt(sum(resid_lin^2)/nrow(test_data)) 
+  
+  resid_quad = test_data[,2] - predict(kcv_quad, newdata=test_data) 
+  RMSE_quad[i] = sqrt(sum(resid_quad^2)/nrow(test_data))
+  
+  resid_cube = test_data[,2] - predict(kcv_cube, newdata=test_data) 
+  RMSE_cube[i] = sqrt(sum(resid_cube^2)/nrow(test_data))
+  
+  resid_fit = test_data[,2] - predict(kcv_fit_lin, newdata=test_data) 
+  RMSE_fit[i] = sqrt(sum(resid_fit^2)/nrow(test_data))
+  
+  resid_fit2 = test_data[,2] - predict(kcv_fit_quad, newdata=test_data) 
+  RMSE_fit2[i] = sqrt(sum(resid_fit2^2)/nrow(test_data))
+  
+  resid_fit3 = test_data[,2] - predict(kcv_fit_cube, newdata=test_data) 
+  RMSE_fit3[i] = sqrt(sum(resid_fit3^2)/nrow(test_data))
+  
+  resid_box = test_data[,2] - predict(kcv_box, newdata=test_data) 
+  RMSE_box[i] = sqrt(sum(resid_box^2)/nrow(test_data))
+  
+}
+mean(RMSE_lin)
+mean(RMSE_quad)
+mean(RMSE_cube)
+mean(RMSE_fit)
+mean(RMSE_fit2)
+mean(RMSE_fit3)
+mean(RMSE_box)
+
+
+
+#Adding a 4th degree term
+fit_model_4<- lm(price~.+I(sqft_lot15^2)+I(sqft_lot15^3)+I(sqft_lot15^4)
+                 +I(sqft_living15^2)+I(sqft_living15^3)+I(sqft_living15^4)+I(long^2)+I(long^3)+I(long^4)
+                 +I(lat^2)+I(lat^3)+I(lat^4)+I(zipcode^2)+I(zipcode^3)+I(zipcode^4)
+                 +I(yr_renovated^2)+I(yr_renovated^3)+I(yr_renovated^4)+I(yr_built^2)+I(yr_built^3)+I(yr_built^4)
+                 +I(sqft_basement^2)+I(sqft_basement^3)+I(sqft_basement^4)+I(sqft_above^2)+I(sqft_above^3)+I(sqft_above^4)
+                 +I(bedrooms^2)+I(bedrooms^3)+I(bedrooms^4)
+                 +I(bathrooms^2)+I(bathrooms^3)+I(bathrooms^4)+I(sqft_living^2)+I(sqft_living^3)+I(sqft_living^4)
+                 +I(sqft_lot^2)+I(sqft_lot^3)+I(sqft_lot^4)+I(floors^2)+I(floors^3)+I(floors^4), data=train)
+summary(fit_model_4)$r.squared
+AIC(fit_model_4)
+
+plot(fitted(fit_model_4), resid(fit_model_4), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_model_4), col = "grey",pch=20,cex=2)
+qqline(resid(fit_model_4), col = "dodgerblue", lwd = 2)
+
+bptest(fit_model_4)
+shapiro.test(resid(fit_model_4))
+
+p4=predict(fit_model_4,test)
+RMSE(test$price,p4)
+
+#Adding 5th degree term
+fit_model_5<- lm(price~.+I(view^2)+I(view^3)+I(view^4)+I(view^5)+I(sqft_lot15^2)+I(sqft_lot15^3)+I(sqft_lot15^4)+I(sqft_lot15^5)
+                 +I(sqft_living15^2)+I(sqft_living15^3)+I(sqft_living15^4)+I(sqft_living15^5)+I(long^2)+I(long^3)+I(long^4)+I(long^5)
+                 +I(lat^2)+I(lat^3)+I(lat^4)+I(lat^5)+I(zipcode^2)+I(zipcode^3)+I(zipcode^4)+I(zipcode^5)
+                 +I(yr_renovated^2)+I(yr_renovated^3)+I(yr_renovated^4)+I(yr_renovated^5)
+                 +I(yr_built^2)+I(yr_built^3)+I(yr_built^4)+I(yr_built^5)
+                 +I(sqft_basement^2)+I(sqft_basement^3)+I(sqft_basement^4)+I(sqft_basement^5)
+                 +I(sqft_above^2)+I(sqft_above^3)+I(sqft_above^4)+I(sqft_above^5)
+                 +I(grade^2)+I(grade^3)+I(grade^4)+I(grade^5)+I(condition^2)+I(condition^3)+I(condition^4)+I(condition^5)
+                 +I(price^2)+I(price^3)+I(price^4)+I(price^5)+I(bedrooms^2)+I(bedrooms^3)+I(bedrooms^4)+I(bedrooms^5)
+                 +I(bathrooms^2)+I(bathrooms^3)+I(bathrooms^4)+I(bathrooms^5)
+                 +I(sqft_living^2)+I(sqft_living^3)+I(sqft_living^4)+I(sqft_living^5)
+                 +I(sqft_lot^2)+I(sqft_lot^3)+I(sqft_lot^4)+I(sqft_lot^5)+I(floors^2)+I(floors^3)+I(floors^4)+I(floors^5)
+                 +I(waterfront^2)+I(waterfront^3)+I(waterfront^4)+I(waterfront^5), data=train)
+summary(fit_model_5)$r.squared
+plot(fitted(fit_model_5), resid(fit_model_5), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_model_5), col = "grey",pch=20,cex=2)
+qqline(resid(fit_model_5), col = "dodgerblue", lwd = 2)
+
+bptest(fit_model_5)
+shapiro.test(resid(fit_model_5))
+
+
+#Adding 6th term
+fit_model_6<- lm(price~.+I(view^2)+I(view^3)+I(view^4)+I(view^5)+I(view^6)
+                 +I(sqft_lot15^2)+I(sqft_lot15^3)+I(sqft_lot15^4)+I(sqft_lot15^5)+I(sqft_lot15^6)
+                 +I(sqft_living15^2)+I(sqft_living15^3)+I(sqft_living15^4)+I(sqft_living15^5)+I(sqft_living15^6)
+                 +I(long^2)+I(long^3)+I(long^4)+I(long^5)+I(long^6)
+                 +I(lat^2)+I(lat^3)+I(lat^4)+I(lat^5)+I(lat^6)
+                 +I(zipcode^2)+I(zipcode^3)+I(zipcode^4)+I(zipcode^5)+I(zipcode^6)
+                 +I(yr_renovated^2)+I(yr_renovated^3)+I(yr_renovated^4)+I(yr_renovated^5)+I(yr_renovated^6)
+                 +I(yr_built^2)+I(yr_built^3)+I(yr_built^4)+I(yr_built^5)+I(yr_built^6)
+                 +I(sqft_basement^2)+I(sqft_basement^3)+I(sqft_basement^4)+I(sqft_basement^5)+I(sqft_basement^6)
+                 +I(sqft_above^2)+I(sqft_above^3)+I(sqft_above^4)+I(sqft_above^5)+I(sqft_above^6)
+                 +I(grade^2)+I(grade^3)+I(grade^4)+I(grade^5)+I(grade^6)
+                 +I(condition^2)+I(condition^3)+I(condition^4)+I(condition^5)+I(condition^6)
+                 +I(price^2)+I(price^3)+I(price^4)+I(price^5)+I(price^6)
+                 +I(bedrooms^2)+I(bedrooms^3)+I(bedrooms^4)+I(bedrooms^5)+I(bedrooms^6)
+                 +I(bathrooms^2)+I(bathrooms^3)+I(bathrooms^4)+I(bathrooms^5)+I(bathrooms^6)
+                 +I(sqft_living^2)+I(sqft_living^3)+I(sqft_living^4)+I(sqft_living^5)+I(sqft_living^6)
+                 +I(sqft_lot^2)+I(sqft_lot^3)+I(sqft_lot^4)+I(sqft_lot^5)+I(sqft_lot^6)
+                 +I(floors^2)+I(floors^3)+I(floors^4)+I(floors^5)+I(floors^6)
+                 +I(waterfront^2)+I(waterfront^3)+I(waterfront^4)+I(waterfront^5)+I(waterfront^6), data=train)
+summary(fit_model_6)$r.squared #0.9993922
+
+plot(fitted(fit_model_6), resid(fit_model_6), col = "black", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Residual plot (Case 1)")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+qqnorm(resid(fit_model_6), col = "grey",pch=20,cex=2)
+qqline(resid(fit_model_6), col = "dodgerblue", lwd = 2)
+
+bptest(fit_model_6)
+shapiro.test(resid(fit_model_6))
+
+
+
